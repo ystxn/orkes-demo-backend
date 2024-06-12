@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.0'
+    id 'io.spring.dependency-management' version '1.1.5'
+    id 'io.freefair.lombok' version '8.6'
+}
+
+group = 'space.yong.orkes'
+version = '1.0'
+
+java {
+    sourceCompatibility = '22'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'io.orkes.conductor:orkes-conductor-client:2.1.1'
+}
+
+bootBuildImage {
+    pullPolicy = "IF_NOT_PRESENT"
+    docker {
+        publishRegistry {
+            username = "$System.env.DOCKER_USER"
+            password = "$System.env.DOCKER_PASS"
+        }
+    }
+}

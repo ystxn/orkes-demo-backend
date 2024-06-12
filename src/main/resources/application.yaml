@@ -1,0 +1,12 @@
+spring:
+  profiles.active: dev
+  main:
+    banner-mode: off
+
+logging.level:
+  org.apache.catalina.core: error
+  org.apache.tomcat.util.http.parser: error
+  org.springframework.boot.web.servlet.context: error
+  org.springframework.web.servlet: error
+  org.springframework.security.web.DefaultSecurityFilterChain: error
+  io.orkes.conductor.client.ApiClient: error
