@@ -10,8 +10,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-    outputs:
-      tag: ${{ steps.meta.outputs.tags }}
+
     steps:
       - uses: actions/checkout@v4
 
