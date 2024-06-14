@@ -1,7 +1,5 @@
 server.servlet.context-path: /demo/api
-spring:
-  profiles.active: dev
-  main.banner-mode: off
+spring.main.banner-mode: off
 
 logging.level:
   org.apache.catalina.core: error
