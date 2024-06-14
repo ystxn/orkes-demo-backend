@@ -10,3 +10,7 @@ logging.level:
   org.springframework.web.servlet: error
   org.springframework.security.web.DefaultSecurityFilterChain: error
   io.orkes.conductor.client.ApiClient: error
+
+management:
+  endpoints.enabled-by-default: false
+  endpoint.health.enabled: true

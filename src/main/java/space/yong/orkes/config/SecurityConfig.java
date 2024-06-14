@@ -31,7 +31,7 @@ public class SecurityConfig {
         return http
             .cors(Customizer.withDefaults())
             .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+            .authorizeHttpRequests(a -> a.requestMatchers("/actuator/**").permitAll().anyRequest().authenticated())
             .addFilterBefore(googleFilter, UsernamePasswordAuthenticationFilter.class)
             .authenticationProvider(authProvider())
             .build();

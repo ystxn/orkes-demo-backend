@@ -20,6 +20,7 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.orkes.conductor:orkes-conductor-client:2.1.1'
     implementation ('com.google.api-client:google-api-client:2.6.0') {
         exclude group: 'commons-logging', module: 'commons-logging'
