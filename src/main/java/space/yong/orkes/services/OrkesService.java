@@ -6,11 +6,13 @@ import com.netflix.conductor.sdk.workflow.executor.WorkflowExecutor;
 import io.orkes.conductor.client.ApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import io.orkes.conductor.client.http.Pair;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,6 +64,29 @@ public class OrkesService {
             new String[] {"api_key"},
             null);
         var response = apiClient.execute(call, Map.class);
+        return response.getData();
+    }
+
+    @GetMapping("human-template")
+    public Object getTemplate(
+        Authentication auth,
+        @RequestParam String name
+    ) {
+        log.info("{} getting template {}", auth.getPrincipal(), name);
+        List<Pair> queryParams = new ArrayList<>();
+        queryParams.add(new Pair("name", name));
+
+        var call = apiClient.buildCall(
+            "/human/template",
+            "GET",
+            queryParams,
+            new ArrayList<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            Map.of(),
+            new String[] {"api_key"},
+            null);
+        var response = apiClient.execute(call, List.class);
         return response.getData();
     }
 }
