@@ -54,7 +54,7 @@ public class OrkesService {
                 "states", List.of("ASSIGNED"),
                 "assignees", List.of(
                     Map.of(
-                        "userType", "CONDUCTOR_USER",
+                        "userType", "EXTERNAL_USER",
                         "user", auth.getPrincipal()
                     )
                 )
@@ -65,6 +65,42 @@ public class OrkesService {
             null);
         var response = apiClient.execute(call, Map.class);
         return response.getData();
+    }
+
+    @PostMapping("human-tasks/{taskId}")
+    public void claimAndCompleteHumanTask(
+        Authentication auth,
+        @PathVariable String taskId,
+        @RequestBody Map<String, Object> input
+    ) throws JsonProcessingException {
+        String inputString = objectMapper.writeValueAsString(input);
+        log.info("Claim and complete human task by {}: {}", auth.getPrincipal(), inputString);
+
+        var claimCall = apiClient.buildCall(
+            "/human/tasks/" + taskId + "/externalUser/" + auth.getPrincipal(),
+            "POST",
+            new ArrayList<>(),
+            new ArrayList<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new String[] {"api_key"},
+            null);
+        apiClient.execute(claimCall, Map.class);
+
+        List<Pair> completeQueryParams = new ArrayList<>();
+        completeQueryParams.add(new Pair("complete", "true"));
+        var completeCall = apiClient.buildCall(
+            "/human/tasks/" + taskId + "/update",
+            "POST",
+            completeQueryParams,
+            new ArrayList<>(),
+            input,
+            new HashMap<>(),
+            new HashMap<>(),
+            new String[] {"api_key"},
+            null);
+        apiClient.execute(completeCall);
     }
 
     @GetMapping("human-template")
