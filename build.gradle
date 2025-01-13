@@ -1,15 +1,15 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.3.0'
-    id 'io.spring.dependency-management' version '1.1.5'
-    id 'io.freefair.lombok' version '8.6'
+    id 'org.springframework.boot' version '3.4.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'io.freefair.lombok' version '8.11'
 }
 
 group = 'space.yong.orkes'
 version = '1.0'
 
 java {
-    sourceCompatibility = '22'
+    sourceCompatibility = '23'
 }
 
 repositories {
@@ -20,20 +20,20 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'io.orkes.conductor:orkes-conductor-client:2.1.1'
-    implementation ('com.google.api-client:google-api-client:2.6.0') {
+    implementation 'io.orkes.conductor:orkes-conductor-client-spring:4.0.4'
+    implementation ('com.google.api-client:google-api-client:2.7.1') {
         exclude group: 'commons-logging', module: 'commons-logging'
     }
-    implementation 'com.google.oauth-client:google-oauth-client:1.36.0'
-    implementation 'com.squareup.okhttp:okhttp:2.7.5'
+    implementation 'com.google.oauth-client:google-oauth-client:1.37.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 
 bootBuildImage {
     pullPolicy = "IF_NOT_PRESENT"
     docker {
         publishRegistry {
-            username = "$System.env.DOCKER_USER"
-            password = "$System.env.DOCKER_PASS"
+            username = System.getenv('DOCKER_USER')
+            password = System.getenv('DOCKER_PASS')
         }
     }
 }
