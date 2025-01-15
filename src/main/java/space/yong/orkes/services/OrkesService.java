@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.conductor.client.http.ConductorClient;
 import com.netflix.conductor.client.http.ConductorClientRequest;
 import com.netflix.conductor.client.http.ConductorClientResponse;
+import com.netflix.conductor.client.http.WorkflowClient;
+import com.netflix.conductor.common.metadata.workflow.StartWorkflowRequest;
+import com.netflix.conductor.common.run.Workflow;
 import com.netflix.conductor.sdk.workflow.executor.WorkflowExecutor;
-import io.orkes.conductor.client.ApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -29,7 +31,7 @@ public class OrkesService {
     private final ObjectMapper objectMapper;
     private final WorkflowExecutor executor;
     private final ConductorClient client;
-    private final ApiClient apiClient;
+    private final WorkflowClient workflowClient;
 
     public record HumanTaskUserAssignee(String userType, Object user) {}
 
@@ -56,9 +58,19 @@ public class OrkesService {
     ) throws JsonProcessingException {
         String inputString = objectMapper.writeValueAsString(input);
         log.info("{} starting {} (v{}): {}", auth.getPrincipal(), workflowName, version, inputString);
-        String output = executor.startWorkflow(workflowName, version, input);
-        log.info("Execution ID: {}", output);
-        return output;
+
+        StartWorkflowRequest request = new StartWorkflowRequest();
+        if (input.containsKey("correlationId")) {
+            request.setCorrelationId(input.get("correlationId").toString());
+            input.remove("correlationId");
+        }
+        request.setInput(input);
+        request.setName(workflowName);
+        request.setVersion(version);
+
+        String executionId = workflowClient.startWorkflow(request);
+        log.info("Execution ID: {}", executionId);
+        return executionId;
     }
 
     @GetMapping("human-tasks")
@@ -118,6 +130,78 @@ public class OrkesService {
             .addQueryParam("name", name)
             .build();
         ConductorClientResponse<List<Object>> resp = client.execute(request, new TypeReference<>() {});
+        return resp.getData();
+    }
+
+    @GetMapping("search-executions")
+    public List<Workflow> searchExecutions(
+        Authentication auth,
+        @RequestParam String workflowName,
+        @RequestParam boolean identityCorrelation
+    ) {
+        String correlationId = identityCorrelation ? auth.getPrincipal().toString() : "";
+        log.info("Searching executions for {} ({})", workflowName, correlationId);
+        return workflowClient.getWorkflows(workflowName, correlationId,false, true);
+    };
+
+    @GetMapping("execution/{executionId}")
+    public Object getExecution(
+        Authentication auth,
+        @PathVariable String executionId
+    ) {
+        log.info("{} getting execution {}", auth.getPrincipal(), executionId);
+        ConductorClientRequest request = ConductorClientRequest.builder()
+            .method(ConductorClientRequest.Method.GET)
+            .path("/workflow/{workflowId}")
+            .addPathParam("workflowId", executionId)
+            .build();
+        return client.execute(request, new TypeReference<>() {}).getData();
+    }
+
+    @PostMapping("signal/{workflowId}")
+    public Object signal(
+        @PathVariable String workflowId,
+        @RequestBody Map<String, Object> input
+    ) throws JsonProcessingException {
+        String inputString = objectMapper.writeValueAsString(input);
+        log.info("Sending signal to {} ({})", workflowId, inputString);
+        ConductorClientResponse<Object> resp =  client.execute(ConductorClientRequest.builder()
+            .method(POST)
+            .path("/tasks/{workflowId}/COMPLETED/signal/sync")
+            .addPathParam("workflowId", workflowId)
+            .body(input)
+            .build(), new TypeReference<>() {});
+        return resp.getData();
+    }
+
+    @GetMapping("workflow-def/{name}")
+    public Object getWorkflowDef(
+        Authentication auth,
+        @PathVariable String name
+    ) {
+        log.info("{} getting workflow definition {}", auth.getPrincipal(), name);
+
+        ConductorClientRequest request = ConductorClientRequest.builder()
+            .method(ConductorClientRequest.Method.GET)
+            .path("/metadata/workflow/{name}")
+            .addPathParam("name", name)
+            .build();
+        ConductorClientResponse<Map<String, Object>> resp = client.execute(request, new TypeReference<>() {});
+        return resp.getData();
+    }
+
+    @GetMapping("schema/{name}")
+    public Object getSchema(
+        Authentication auth,
+        @PathVariable String name
+    ) {
+        log.info("{} getting schema {}", auth.getPrincipal(), name);
+        var request = ConductorClientRequest.builder()
+            .method(GET)
+            .path("/schema/{name}")
+            .addPathParam("name", name)
+            .build();
+        ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
         return resp.getData();
     }
 }
