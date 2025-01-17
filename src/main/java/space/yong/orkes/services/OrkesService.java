@@ -6,12 +6,12 @@ import static com.netflix.conductor.client.http.ConductorClientRequest.Method.PO
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.netflix.conductor.client.http.ConductorClient;
 import com.netflix.conductor.client.http.ConductorClientRequest;
 import com.netflix.conductor.client.http.ConductorClientResponse;
 import com.netflix.conductor.client.http.WorkflowClient;
 import com.netflix.conductor.common.metadata.workflow.StartWorkflowRequest;
 import com.netflix.conductor.common.run.Workflow;
+import io.orkes.conductor.client.ApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -31,13 +31,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrkesService {
     private final ObjectMapper objectMapper;
-    private final ConductorClient client;
+    private final ApiClient client;
     private final WorkflowClient workflowClient;
 
     public record HumanTaskUserAssignee(String userType, Object user) {}
 
     @PostMapping("execute/{workflowName}/{version}")
-    public Object executeWorkflow(
+    public Object executeWorkflowWithVersion(
         Authentication auth,
         @PathVariable String workflowName,
         @PathVariable int version,
@@ -58,7 +58,30 @@ public class OrkesService {
             .path("/workflow/execute/{name}/{version}")
             .addPathParam("name", workflowName)
             .addPathParam("version", version)
+            .addQueryParam("waitForSeconds", 60)
+            .addQueryParam("consistency", "SYNCHRONOUS")
             .body(body)
+            .build();
+        ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
+        return resp.getData();
+    }
+
+    @PostMapping("execute/{workflowName}")
+    public Object executeWorkflow(
+        Authentication auth,
+        @PathVariable String workflowName,
+        @RequestBody Map<String, Object> input
+    ) throws JsonProcessingException {
+        String inputString = objectMapper.writeValueAsString(input);
+        log.info("{} executing {} (v{}): {}", auth.getPrincipal(), workflowName, inputString);
+
+        var request = ConductorClientRequest.builder()
+            .method(POST)
+            .path("/workflow/execute/{name}")
+            .addPathParam("name", workflowName)
+            .addQueryParam("waitForSeconds", 60)
+            .addQueryParam("consistency", "SYNCHRONOUS")
+            .body(input)
             .build();
         ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
         return resp.getData();

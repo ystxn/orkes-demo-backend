@@ -12,3 +12,8 @@ logging.level:
 management:
   endpoints.enabled-by-default: false
   endpoint.health.enabled: true
+
+conductor.client.timeout:
+  connect: 0
+  read: 0
+  write: 0
