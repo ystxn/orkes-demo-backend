@@ -44,7 +44,7 @@ public class OrkesService {
         @RequestBody Map<String, Object> input
     ) throws JsonProcessingException {
         String inputString = objectMapper.writeValueAsString(input);
-        log.info("{} executing {} (v{}): {}", auth.getPrincipal(), workflowName, version, inputString);
+        log.info("{} executing versioned {} (v{}): {}", auth.getPrincipal(), workflowName, version, inputString);
 
         Map <String, Object> body = new HashMap<>();
         if (input.containsKey("correlationId")) {
@@ -67,7 +67,7 @@ public class OrkesService {
     }
 
     @PostMapping("execute/{workflowName}")
-    public Object executeWorkflow(
+    public Map<String, Object> executeWorkflow(
         Authentication auth,
         @PathVariable String workflowName,
         @RequestBody Map<String, Object> input
@@ -83,8 +83,10 @@ public class OrkesService {
             .addQueryParam("consistency", "SYNCHRONOUS")
             .body(input)
             .build();
-        ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
-        return resp.getData();
+        ConductorClientResponse<Map<String, Object>> resp = client.execute(request, new TypeReference<>() {});
+        Map<String, Object> response = resp.getData();
+        response.put("executionId", resp.getHeaders().get("workflowid"));
+        return response;
     }
 
     @PostMapping("start/{workflowName}/{version}")
