@@ -59,7 +59,7 @@ public class OrkesService {
             .addPathParam("name", workflowName)
             .addPathParam("version", version)
             .addQueryParam("waitForSeconds", 60)
-            .addQueryParam("consistency", "SYNCHRONOUS")
+            .addQueryParam("consistency", "DURABLE")
             .body(body)
             .build();
         ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
@@ -73,7 +73,7 @@ public class OrkesService {
         @RequestBody Map<String, Object> input
     ) throws JsonProcessingException {
         String inputString = objectMapper.writeValueAsString(input);
-        log.info("{} executing {} (v{}): {}", auth.getPrincipal(), workflowName, inputString);
+        log.info("{} executing {}: {}", auth.getPrincipal(), workflowName, inputString);
 
         var request = ConductorClientRequest.builder()
             .method(POST)
