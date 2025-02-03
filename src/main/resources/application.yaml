@@ -1,5 +1,10 @@
 server.servlet.context-path: /demo/api
-spring.main.banner-mode: off
+spring:
+  main.banner-mode: off
+  servlet.multipart:
+    max-file-size: 2MB
+    max-request-size: 2MB
+    enabled: true
 
 logging.level:
   org.apache.catalina.core: error
@@ -10,10 +15,5 @@ logging.level:
   io.orkes.conductor.client.ApiClient: error
 
 management:
-  endpoints.enabled-by-default: false
-  endpoint.health.enabled: true
-
-conductor.client.timeout:
-  connect: 0
-  read: 0
-  write: 0
+  endpoint.health.access: read_only
+  endpoints.access.default: none
