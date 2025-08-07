@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.4.7'
+    id 'org.springframework.boot' version '3.5.3'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'io.freefair.lombok' version '8.14'
 }
@@ -20,7 +20,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'io.orkes.conductor:orkes-conductor-client-spring:4.0.10'
+    implementation 'io.orkes.conductor:orkes-conductor-client-spring:4.0.11'
     implementation ('com.google.api-client:google-api-client:2.8.0') {
         exclude group: 'commons-logging', module: 'commons-logging'
     }
