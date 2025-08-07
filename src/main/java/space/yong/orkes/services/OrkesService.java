@@ -1,6 +1,5 @@
 package space.yong.orkes.services;
 
-import static com.netflix.conductor.client.http.ConductorClientRequest.Method.DELETE;
 import static com.netflix.conductor.client.http.ConductorClientRequest.Method.GET;
 import static com.netflix.conductor.client.http.ConductorClientRequest.Method.POST;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -8,10 +7,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.conductor.client.http.ConductorClientRequest;
 import com.netflix.conductor.client.http.ConductorClientResponse;
-import com.netflix.conductor.client.http.WorkflowClient;
+import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.workflow.StartWorkflowRequest;
+import com.netflix.conductor.common.metadata.workflow.WorkflowDef;
 import com.netflix.conductor.common.run.Workflow;
 import io.orkes.conductor.client.ApiClient;
+import io.orkes.conductor.client.enums.Consistency;
+import io.orkes.conductor.client.enums.ReturnStrategy;
+import io.orkes.conductor.client.http.OrkesMetadataClient;
+import io.orkes.conductor.client.http.OrkesTaskClient;
+import io.orkes.conductor.client.http.OrkesWorkflowClient;
+import io.orkes.conductor.client.model.SignalResponse;
+import io.orkes.conductor.client.model.WorkflowRun;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -22,9 +29,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @RestController
@@ -32,61 +39,50 @@ import java.util.Map;
 public class OrkesService {
     private final ObjectMapper objectMapper;
     private final ApiClient client;
-    private final WorkflowClient workflowClient;
+    private final OrkesWorkflowClient workflowClient;
+    private final OrkesMetadataClient metadataClient;
+    private final OrkesTaskClient taskClient;
 
     public record HumanTaskUserAssignee(String userType, Object user) {}
 
     @PostMapping("execute/{workflowName}/{version}")
-    public Object executeWorkflowWithVersion(
+    public WorkflowRun executeWorkflow(
         Authentication auth,
         @PathVariable String workflowName,
         @PathVariable int version,
         @RequestBody Map<String, Object> input
-    ) throws JsonProcessingException {
+    ) throws JsonProcessingException, ExecutionException, InterruptedException {
         String inputString = objectMapper.writeValueAsString(input);
         log.info("{} executing versioned {} (v{}): {}", auth.getPrincipal(), workflowName, version, inputString);
 
-        Map <String, Object> body = new HashMap<>();
+        var request = new StartWorkflowRequest();
+        request.setName(workflowName);
+        request.setVersion(version);
         if (input.containsKey("correlationId")) {
-            body.put("correlationId", input.get("correlationId").toString());
+            request.setCorrelationId(input.get("correlationId").toString());
             input.remove("correlationId");
         }
-        body.put("input", input);
-
-        var request = ConductorClientRequest.builder()
-            .method(POST)
-            .path("/workflow/execute/{name}/{version}")
-            .addPathParam("name", workflowName)
-            .addPathParam("version", version)
-            .addQueryParam("waitForSeconds", 60)
-            .addQueryParam("consistency", "DURABLE")
-            .body(body)
-            .build();
-        ConductorClientResponse<Object> resp = client.execute(request, new TypeReference<>() {});
-        return resp.getData();
+        request.setInput(input);
+        return workflowClient.executeWorkflow(request, "", 60).get();
     }
 
     @PostMapping("execute/{workflowName}")
-    public Map<String, Object> executeWorkflow(
+    public SignalResponse executeSyncWorkflow(
         Authentication auth,
         @PathVariable String workflowName,
         @RequestBody Map<String, Object> input
-    ) throws JsonProcessingException {
+    ) throws JsonProcessingException, ExecutionException, InterruptedException {
         String inputString = objectMapper.writeValueAsString(input);
         log.info("{} executing {}: {}", auth.getPrincipal(), workflowName, inputString);
 
-        var request = ConductorClientRequest.builder()
-            .method(POST)
-            .path("/workflow/execute/{name}")
-            .addPathParam("name", workflowName)
-            .addQueryParam("waitForSeconds", 60)
-            .addQueryParam("consistency", "SYNCHRONOUS")
-            .body(input)
-            .build();
-        ConductorClientResponse<Map<String, Object>> resp = client.execute(request, new TypeReference<>() {});
-        Map<String, Object> response = resp.getData();
-        response.put("executionId", resp.getHeaders().get("workflowid"));
-        return response;
+        var request = new StartWorkflowRequest();
+        request.setName(workflowName);
+        if (input.containsKey("correlationId")) {
+            request.setCorrelationId(input.get("correlationId").toString());
+            input.remove("correlationId");
+        }
+        request.setInput(input);
+        return workflowClient.executeWorkflowWithReturnStrategy(request,null,60, Consistency.SYNCHRONOUS, ReturnStrategy.BLOCKING_TASK_INPUT).get();
     }
 
     @PostMapping("start/{workflowName}/{version}")
@@ -179,10 +175,12 @@ public class OrkesService {
         @RequestParam String workflowName,
         @RequestParam boolean identityCorrelation
     ) {
-        String correlationId = identityCorrelation ? auth.getPrincipal().toString() : "";
+        String email = auth.getPrincipal().toString();
+        List<String> correlationId = identityCorrelation ? List.of(email) : List.of();
         log.info("Searching executions for {} ({})", workflowName, correlationId);
-        return workflowClient.getWorkflows(workflowName, correlationId,false, true);
-    };
+        var results = workflowClient.getWorkflowsByNamesAndCorrelationIds(correlationId, List.of(workflowName), false, false);
+        return results.containsKey(email) ? results.get(email) : List.of();
+    }
 
     @GetMapping("execution/{executionId}")
     public Object getExecution(
@@ -199,35 +197,22 @@ public class OrkesService {
     }
 
     @PostMapping("signal/{workflowId}")
-    public Object signal(
+    public SignalResponse signal(
         @PathVariable String workflowId,
         @RequestBody Map<String, Object> input
     ) throws JsonProcessingException {
         String inputString = objectMapper.writeValueAsString(input);
         log.info("Sending signal to {} ({})", workflowId, inputString);
-        ConductorClientResponse<Object> resp =  client.execute(ConductorClientRequest.builder()
-            .method(POST)
-            .path("/tasks/{workflowId}/COMPLETED/signal/sync")
-            .addPathParam("workflowId", workflowId)
-            .body(input)
-            .build(), new TypeReference<>() {});
-        return resp.getData();
+        return taskClient.signal(workflowId, Task.Status.COMPLETED, input);
     }
 
     @GetMapping("workflow-def/{name}")
-    public Object getWorkflowDef(
+    public WorkflowDef getWorkflowDef(
         Authentication auth,
         @PathVariable String name
     ) {
         log.info("{} getting workflow definition {}", auth.getPrincipal(), name);
-
-        ConductorClientRequest request = ConductorClientRequest.builder()
-            .method(ConductorClientRequest.Method.GET)
-            .path("/metadata/workflow/{name}")
-            .addPathParam("name", name)
-            .build();
-        ConductorClientResponse<Map<String, Object>> resp = client.execute(request, new TypeReference<>() {});
-        return resp.getData();
+        return metadataClient.getWorkflowDef(name, null);
     }
 
     @GetMapping("schema/{name}")
@@ -252,11 +237,6 @@ public class OrkesService {
         @RequestParam(required = false) String reason
     ) {
         log.info("{} terminating workflow {}", auth.getPrincipal(), workflowId);
-        client.execute(ConductorClientRequest.builder()
-            .method(DELETE)
-            .path("/workflow/{workflowId}")
-            .addPathParam("workflowId", workflowId)
-            .addQueryParam("reason", reason)
-            .build());
+        workflowClient.terminateWorkflow(workflowId,reason);
     }
 }
