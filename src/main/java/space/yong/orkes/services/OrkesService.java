@@ -10,7 +10,9 @@ import com.netflix.conductor.client.http.ConductorClientResponse;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.workflow.StartWorkflowRequest;
 import com.netflix.conductor.common.metadata.workflow.WorkflowDef;
+import com.netflix.conductor.common.run.SearchResult;
 import com.netflix.conductor.common.run.Workflow;
+import com.netflix.conductor.common.run.WorkflowSummary;
 import io.orkes.conductor.client.ApiClient;
 import io.orkes.conductor.client.enums.Consistency;
 import io.orkes.conductor.client.enums.ReturnStrategy;
@@ -170,16 +172,24 @@ public class OrkesService {
     }
 
     @GetMapping("search-executions")
-    public List<Workflow> searchExecutions(
+    public List<WorkflowSummary> searchExecutions(
         Authentication auth,
         @RequestParam String workflowName,
-        @RequestParam boolean identityCorrelation
+        @RequestParam(defaultValue = "false") boolean identityCorrelation,
+        @RequestParam String status,
+        @RequestParam(defaultValue = "1") int size
     ) {
         String email = auth.getPrincipal().toString();
-        List<String> correlationId = identityCorrelation ? List.of(email) : List.of();
-        log.info("Searching executions for {} ({})", workflowName, correlationId);
-        var results = workflowClient.getWorkflowsByNamesAndCorrelationIds(correlationId, List.of(workflowName), false, false);
-        return results.containsKey(email) ? results.get(email) : List.of();
+        log.info("Searching executions for {} ({})", workflowName, email);
+        String query = "workflowType IN (" + workflowName + ")";
+        if (identityCorrelation) {
+            query += " AND correlationId IN (" + email + ")";
+        }
+        if (status != null && !status.isBlank()) {
+            query += " AND status IN (" + status + ")";
+        }
+        log.info("Search query: {}", query);
+        return workflowClient.search(0, size, "startTime:DESC", null, query).getResults();
     }
 
     @GetMapping("execution/{executionId}")
