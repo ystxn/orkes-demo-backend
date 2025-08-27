@@ -13,6 +13,7 @@ logging.level:
   org.springframework.web.servlet: error
   org.springframework.security.web.DefaultSecurityFilterChain: error
   io.orkes.conductor.client.ApiClient: error
+  com.azure.core.http.netty.implementation: error
 
 management:
   endpoint.health.access: read_only
