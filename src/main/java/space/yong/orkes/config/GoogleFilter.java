@@ -16,11 +16,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
+import com.github.benmanes.caffeine.cache.Cache;
 
 @Service
 public class GoogleFilter extends OncePerRequestFilter {
     @Value("${google.client-id}")
     private String clientId;
+
+    private final Cache<String, TokenCacheConfig.CachedToken> tokenCache;
+
+    public GoogleFilter(Cache<String, TokenCacheConfig.CachedToken> tokenCache) {
+        this.tokenCache = tokenCache;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -29,17 +36,30 @@ public class GoogleFilter extends OncePerRequestFilter {
         @NonNull FilterChain chain
     ) throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
-
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            final String token = authHeader.substring(7);
             try {
-                String token = authHeader.substring(7);
-                var verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
-                    .setAudience(List.of(clientId))
-                    .build();
-                GoogleIdToken idToken = GoogleIdToken.parse(verifier.getJsonFactory(), token);
-                verifier.verify(idToken);
-                GoogleIdToken.Payload payload = idToken.getPayload();
-                var authToken = new UsernamePasswordAuthenticationToken(payload.getEmail(), null, null);
+                var cached = tokenCache.getIfPresent(token);
+                if (cached == null) {
+                    var verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+                        .setAudience(List.of(clientId))
+                        .build();
+                    GoogleIdToken idToken = GoogleIdToken.parse(verifier.getJsonFactory(), token);
+
+                    if (!verifier.verify(idToken)) {
+                        throw new SecurityException("Invalid Google ID token");
+                    }
+
+                    GoogleIdToken.Payload payload = idToken.getPayload();
+                    String email = payload.getEmail();
+                    long expSeconds = payload.getExpirationTimeSeconds();
+                    var expiresAt = java.time.Instant.ofEpochSecond(expSeconds);
+
+                    var value = new TokenCacheConfig.CachedToken(email, expiresAt);
+                    tokenCache.put(token, value);
+                    cached = value;
+                }
+                var authToken = new UsernamePasswordAuthenticationToken(cached.email(), null, List.of());
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             } catch (Exception e) {
                 response.setStatus(401);
