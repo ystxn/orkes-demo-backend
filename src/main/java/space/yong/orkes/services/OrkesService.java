@@ -10,8 +10,6 @@ import com.netflix.conductor.client.http.ConductorClientResponse;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.workflow.StartWorkflowRequest;
 import com.netflix.conductor.common.metadata.workflow.WorkflowDef;
-import com.netflix.conductor.common.run.SearchResult;
-import com.netflix.conductor.common.run.Workflow;
 import com.netflix.conductor.common.run.WorkflowSummary;
 import io.orkes.conductor.client.ApiClient;
 import io.orkes.conductor.client.enums.Consistency;
@@ -209,10 +207,15 @@ public class OrkesService {
     @PostMapping("signal/{workflowId}")
     public SignalResponse signal(
         @PathVariable String workflowId,
-        @RequestBody Map<String, Object> input
+        @RequestBody Map<String, Object> input,
+        @RequestParam(defaultValue = "false") boolean async
     ) throws JsonProcessingException {
         String inputString = objectMapper.writeValueAsString(input);
         log.info("Sending signal to {} ({})", workflowId, inputString);
+        if (async) {
+            taskClient.signalAsync(workflowId, Task.Status.COMPLETED, input);
+            return null;
+        }
         return taskClient.signal(workflowId, Task.Status.COMPLETED, input);
     }
 
